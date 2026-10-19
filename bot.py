@@ -97,24 +97,27 @@ async def cmd_start(message: Message):
   )
 
 
-# --- НОВА ТАЄМНА КОМАНДА ДЛЯ ОЧИЩЕННЯ БАЗИ ---
 @router.message(Command("clear_all"))
 async def cmd_clear_all(message: Message):
   if not is_allowed(message.from_user.id) or not DATABASE_URL:
     return
-  
+
   try:
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM photos") # Видаляє всі записи з таблиці
+    cursor.execute("DELETE FROM photos")
     conn.commit()
     cursor.close()
     conn.close()
-    await message.answer("🧹 <b>Усі спогади успішно видалено з бази даних!</b> Архів знову чистий.", parse_mode="HTML", reply_markup=get_main_keyboard())
+    await message.answer(
+        "🧹 <b>Усі спогади успішно видалено з бази даних!</b> Архів знову"
+        " чистий.",
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard(),
+    )
   except Exception as e:
     print(f"Помилка очищення БД: {e}")
     await message.answer("❌ Виникла помилка при спробі очистити архів.")
-# ---------------------------------------------
 
 
 @router.message(F.photo)
@@ -154,7 +157,8 @@ async def handle_location(message: Message, state: FSMContext):
     cursor = conn.cursor()
     for file_id in photos_list:
       cursor.execute(
-          "INSERT INTO photos (user_id, file_id, location) VALUES (%s, %s, %s)",
+          "INSERT INTO photos (user_id, file_id, location) VALUES (%s, %s,"
+          " %s)",
           (message.from_user.id, file_id, location),
       )
     conn.commit()
@@ -188,7 +192,9 @@ async def cmd_random_memory(message: Message):
     rows = []
 
   if not rows:
-    await message.answer("В архіві ще немає фото!", reply_markup=get_main_keyboard())
+    await message.answer(
+        "В архіві ще немає фото!", reply_markup=get_main_keyboard()
+    )
     return
 
   photo = random.choice(rows)
@@ -256,7 +262,9 @@ async def cmd_stats(message: Message):
 
 def calculate_months():
   now = datetime.now()
-  months = (now.year - START_DATE.year) * 12 + (now.month - START_DATE.month)
+  months = (now.year - START_DATE.year) * 12 + (
+      now.month - START_DATE.month
+  )
   return months
 
 
@@ -272,9 +280,9 @@ async def monthly_announcement_loop(bot: Bot):
               chat_id=user_id,
               text=(
                   f"❤️ <b>Вітаю, у нас сьогодні річниця — {total_months}"
-                  " місяців разом!</b> ❤️\n\nСьогодні 8 число! 🥰 Час згадати"
-                  " найліпші моменти, тисніть кнопку нижче або «🎲 Випадковий"
-                  " спогад»!"
+                  " місяців разом!</b> ❤️\n\nСьогодні 8 число! 🥰 Час"
+                  " згадати найліпші моменти, тисніть кнопку нижче або"
+                  " «🎲 Випадковий спогад»!"
               ),
               parse_mode="HTML",
           )
@@ -290,24 +298,4 @@ async def handle_web(request):
 
 async def main():
   init_db()
-  bot = Bot(token=TOKEN)
-  dp = Dispatcher(storage=MemoryStorage())
-  dp.include_router(router)
-
-  asyncio.create_task(monthly_announcement_loop(bot))
-
-  app = web.Application()
-  app.router.add_get("/", handle_web)
-  runner = web.AppRunner(app)
-  await runner.setup()
-  port = int(os.environ.get("PORT", 8080))
-  site = web.TCPSite(runner, "0.0.0.0", port)
-  await site.start()
-
-  print(f"Бот і веб-сервер запущено на порті {port}!")
-  await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-  logging.basicConfig(level=logging.INFO)
-  asyncio.run(main())
+  bot = Bot(
