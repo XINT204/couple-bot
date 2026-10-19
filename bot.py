@@ -25,7 +25,6 @@ TOKEN = "8806921238:AAGfgdhGPQd5Gh0QZM2kYCHYnMOq7jKSf5c"
 ALLOWED_USERS = [679531786, 572759802]
 START_DATE = datetime(2024, 8, 8)
 
-# Рядок підключення до хмарної бази даних Supabase через змінні середовища Render
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 router = Router()
@@ -37,21 +36,25 @@ class PhotoStates(StatesGroup):
 
 def init_db():
   if not DATABASE_URL:
-    print("Попередження: DATABASE_URL не знайдено!")
+    print("❌ Помилка: DATABASE_URL не знайдено в змінних середовища!")
     return
-  conn = psycopg2.connect(DATABASE_URL)
-  cursor = conn.cursor()
-  cursor.execute("""
-        CREATE TABLE IF NOT EXISTS photos (
-            id SERIAL PRIMARY KEY,
-            user_id BIGINT,
-            file_id TEXT,
-            location TEXT
-        )
-    """)
-  conn.commit()
-  cursor.close()
-  conn.close()
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS photos (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                file_id TEXT,
+                location TEXT
+            )
+        """)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("✅ Базу даних успішно ініціалізовано!")
+  except Exception as e:
+    print(f"❌ Помилка підключення до бази даних: {e}")
 
 
 def is_allowed(user_id: int) -> bool:
@@ -126,18 +129,21 @@ async def handle_location(message: Message, state: FSMContext):
     await state.clear()
     return
 
-  conn = psycopg2.connect(DATABASE_URL)
-  cursor = conn.cursor()
-  for file_id in photos_list:
-    cursor.execute(
-        "INSERT INTO photos (user_id, file_id, location) VALUES (%s, %s, %s)",
-        (message.from_user.id, file_id, location),
-    )
-  conn.commit()
-  cursor.close()
-  conn.close()
-  await state.clear()
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    for file_id in photos_list:
+      cursor.execute(
+          "INSERT INTO photos (user_id, file_id, location) VALUES (%s, %s, %s)",
+          (message.from_user.id, file_id, location),
+      )
+    conn.commit()
+    cursor.close()
+    conn.close()
+  except Exception as e:
+    print(f"Помилка запису в БД: {e}")
 
+  await state.clear()
   await message.answer(
       f"✅ Збережено в архів: <b>{len(photos_list)} шт.</b>\n📍 Локація:"
       f" <b>{location}</b>",
@@ -150,12 +156,16 @@ async def handle_location(message: Message, state: FSMContext):
 async def cmd_random_memory(message: Message):
   if not is_allowed(message.from_user.id) or not DATABASE_URL:
     return
-  conn = psycopg2.connect(DATABASE_URL)
-  cursor = conn.cursor()
-  cursor.execute("SELECT file_id, location FROM photos")
-  rows = cursor.fetchall()
-  cursor.close()
-  conn.close()
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_id, location FROM photos")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+  except Exception as e:
+    print(f"Помилка читання з БД: {e}")
+    rows = []
 
   if not rows:
     await message.answer("В архіві ще немає фото!", reply_markup=get_main_keyboard())
@@ -174,12 +184,16 @@ async def cmd_random_memory(message: Message):
 async def callback_random_next(callback: CallbackQuery):
   if not is_allowed(callback.from_user.id) or not DATABASE_URL:
     return
-  conn = psycopg2.connect(DATABASE_URL)
-  cursor = conn.cursor()
-  cursor.execute("SELECT file_id, location FROM photos")
-  rows = cursor.fetchall()
-  cursor.close()
-  conn.close()
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_id, location FROM photos")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+  except Exception as e:
+    print(f"Помилка читання з БД: {e}")
+    rows = []
 
   if not rows:
     await callback.answer("Немає фото!", show_alert=True)
@@ -201,12 +215,17 @@ async def callback_random_next(callback: CallbackQuery):
 async def cmd_stats(message: Message):
   if not is_allowed(message.from_user.id) or not DATABASE_URL:
     return
-  conn = psycopg2.connect(DATABASE_URL)
-  cursor = conn.cursor()
-  cursor.execute("SELECT COUNT(*), COUNT(DISTINCT location) FROM photos")
-  count, unique_locations = cursor.fetchone()
-  cursor.close()
-  conn.close()
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*), COUNT(DISTINCT location) FROM photos")
+    count, unique_locations = cursor.fetchone()
+    cursor.close()
+    conn.close()
+  except Exception as e:
+    print(f"Помилка статистики з БД: {e}")
+    count, unique_locations = 0, 0
+
   await message.answer(
       f"📊 <b>Статистика:</b>\n\n📸 Фото: <b>{count}</b>\n📍 Локацій:"
       f" <b>{unique_locations}</b>",
@@ -262,3 +281,13 @@ async def main():
   runner = web.AppRunner(app)
   await runner.setup()
   port = int(os.environ.get("PORT", 8080))
+  site = web.TCPSite(runner, "0.0.0.0", port)
+  await site.start()
+
+  print(f"Бот і веб-сервер запущено на порті {port}!")
+  await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+  logging.basicConfig(level=logging.INFO)
+  asyncio.run(main())
