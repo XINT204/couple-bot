@@ -164,8 +164,9 @@ async def handle_location(message: Message, state: FSMContext):
     conn.commit()
     cursor.close()
     conn.close()
+    print(f"✅ Успішно збережено {len(photos_list)} фото в БД з локацією: {location}")
   except Exception as e:
-    print(f"Помилка запису в БД: {e}")
+    print(f"❌ Помилка запису в БД: {e}")
 
   await state.clear()
   await message.answer(
@@ -188,7 +189,7 @@ async def cmd_random_memory(message: Message):
     cursor.close()
     conn.close()
   except Exception as e:
-    print(f"Помилка читання з БД: {e}")
+    print(f"❌ Помилка читання з БД: {e}")
     rows = []
 
   if not rows:
@@ -218,7 +219,7 @@ async def callback_random_next(callback: CallbackQuery):
     cursor.close()
     conn.close()
   except Exception as e:
-    print(f"Помилка читання з БД: {e}")
+    print(f"❌ Помилка читання з БД: {e}")
     rows = []
 
   if not rows:
@@ -249,7 +250,7 @@ async def cmd_stats(message: Message):
     cursor.close()
     conn.close()
   except Exception as e:
-    print(f"Помилка статистики з БД: {e}")
+    print(f"❌ Помилка статистики з БД: {e}")
     count, unique_locations = 0, 0
 
   await message.answer(
