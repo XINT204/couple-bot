@@ -261,4 +261,4 @@ async def main():
   app.router.add_get("/", handle_web)
   runner = web.AppRunner(app)
   await runner.setup()
-  port = int(os.environ.get("PORT", 8080
+  port = int(os.environ.get("PORT", 8080))
