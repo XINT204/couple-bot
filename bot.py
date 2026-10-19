@@ -298,4 +298,26 @@ async def handle_web(request):
 
 async def main():
   init_db()
-  bot = Bot(
+  bot = Bot(token=TOKEN)
+  dp = Dispatcher(storage=MemoryStorage())
+  dp.include_router(router)
+
+  asyncio.create_task(monthly_announcement_loop(bot))
+
+  app = web.Application()
+  app.router.add_get("/", handle_web)
+  runner = web.AppRunner(app)
+  await runner.setup()
+  port = int(os.environ.get("PORT", 8080))
+  site = web.TCPSite(runner, "0.0.0.0", port)
+  await site.start()
+
+  await bot.delete_webhook(drop_pending_updates=True)
+
+  print(f"Бот і веб-сервер запущено на порті {port}!")
+  await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+  logging.basicConfig(level=logging.INFO)
+  asyncio.run(main())
