@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import os
 import random
-import sqlite3
+import psycopg2
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
@@ -21,12 +21,12 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 
-# Токен та ID
 TOKEN = "8806921238:AAGfgdhGPQd5Gh0QZM2kYCHYnMOq7jKSf5c"
 ALLOWED_USERS = [679531786, 572759802]
+START_DATE = datetime(2024, 8, 8)
 
-# Дата початку стосунків (змініть рік на ваш, наприклад 2024 або 2025)
-START_DATE = datetime(2026, 8, 8)
+# Рядок підключення до хмарної бази даних Supabase через змінні середовища Render
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 router = Router()
 
@@ -36,17 +36,21 @@ class PhotoStates(StatesGroup):
 
 
 def init_db():
-  conn = sqlite3.connect("couple_photos.db")
+  if not DATABASE_URL:
+    print("Попередження: DATABASE_URL не знайдено!")
+    return
+  conn = psycopg2.connect(DATABASE_URL)
   cursor = conn.cursor()
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS photos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             file_id TEXT,
             location TEXT
         )
     """)
   conn.commit()
+  cursor.close()
   conn.close()
 
 
@@ -118,18 +122,19 @@ async def handle_location(message: Message, state: FSMContext):
   photos_list = data.get("photos_list", [])
   location = message.text
 
-  if not photos_list:
+  if not photos_list or not DATABASE_URL:
     await state.clear()
     return
 
-  conn = sqlite3.connect("couple_photos.db")
+  conn = psycopg2.connect(DATABASE_URL)
   cursor = conn.cursor()
   for file_id in photos_list:
     cursor.execute(
-        "INSERT INTO photos (user_id, file_id, location) VALUES (?, ?, ?)",
+        "INSERT INTO photos (user_id, file_id, location) VALUES (%s, %s, %s)",
         (message.from_user.id, file_id, location),
     )
   conn.commit()
+  cursor.close()
   conn.close()
   await state.clear()
 
@@ -143,12 +148,13 @@ async def handle_location(message: Message, state: FSMContext):
 
 @router.message(F.text == "🎲 Випадковий спогад")
 async def cmd_random_memory(message: Message):
-  if not is_allowed(message.from_user.id):
+  if not is_allowed(message.from_user.id) or not DATABASE_URL:
     return
-  conn = sqlite3.connect("couple_photos.db")
+  conn = psycopg2.connect(DATABASE_URL)
   cursor = conn.cursor()
   cursor.execute("SELECT file_id, location FROM photos")
   rows = cursor.fetchall()
+  cursor.close()
   conn.close()
 
   if not rows:
@@ -166,12 +172,13 @@ async def cmd_random_memory(message: Message):
 
 @router.callback_query(F.data == "next_random")
 async def callback_random_next(callback: CallbackQuery):
-  if not is_allowed(callback.from_user.id):
+  if not is_allowed(callback.from_user.id) or not DATABASE_URL:
     return
-  conn = sqlite3.connect("couple_photos.db")
+  conn = psycopg2.connect(DATABASE_URL)
   cursor = conn.cursor()
   cursor.execute("SELECT file_id, location FROM photos")
   rows = cursor.fetchall()
+  cursor.close()
   conn.close()
 
   if not rows:
@@ -192,12 +199,13 @@ async def callback_random_next(callback: CallbackQuery):
 
 @router.message(F.text == "📊 Статистика")
 async def cmd_stats(message: Message):
-  if not is_allowed(message.from_user.id):
+  if not is_allowed(message.from_user.id) or not DATABASE_URL:
     return
-  conn = sqlite3.connect("couple_photos.db")
+  conn = psycopg2.connect(DATABASE_URL)
   cursor = conn.cursor()
   cursor.execute("SELECT COUNT(*), COUNT(DISTINCT location) FROM photos")
   count, unique_locations = cursor.fetchone()
+  cursor.close()
   conn.close()
   await message.answer(
       f"📊 <b>Статистика:</b>\n\n📸 Фото: <b>{count}</b>\n📍 Локацій:"
@@ -207,14 +215,12 @@ async def cmd_stats(message: Message):
   )
 
 
-# Функція для підрахунку точної кількості місяців разом
 def calculate_months():
   now = datetime.now()
   months = (now.year - START_DATE.year) * 12 + (now.month - START_DATE.month)
   return months
 
 
-# Фонова задача для щомісячного нагадування 8-го числа
 async def monthly_announcement_loop(bot: Bot):
   last_sent_month = None
   while True:
@@ -240,7 +246,7 @@ async def monthly_announcement_loop(bot: Bot):
 
 
 async def handle_web(request):
-  return web.Response(text="Bot is running!")
+  return web.Response(text="Bot is working!")
 
 
 async def main():
@@ -249,21 +255,10 @@ async def main():
   dp = Dispatcher(storage=MemoryStorage())
   dp.include_router(router)
 
-  # Запуск фонового сповіщення
   asyncio.create_task(monthly_announcement_loop(bot))
 
   app = web.Application()
   app.router.add_get("/", handle_web)
   runner = web.AppRunner(app)
   await runner.setup()
-  port = int(os.environ.get("PORT", 8080))
-  site = web.TCPSite(runner, "0.0.0.0", port)
-  await site.start()
-
-  print(f"Бот і веб-сервер запущено на порті {port}!")
-  await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-  logging.basicConfig(level=logging.INFO)
-  asyncio.run(main())
+  port = int(os.environ.get("PORT", 8080
