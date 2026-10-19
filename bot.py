@@ -21,7 +21,7 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 
-TOKEN = "8806921238:AAGfgdhGPQd5Gh0QZM2kYCHYnMOq7jKSf5c"
+TOKEN = "8806921238:AAERLGVPhhtzhwQYuIb9TLOKgJkydafS1Tk"
 ALLOWED_USERS = [679531786, 572759802]
 START_DATE = datetime(2024, 8, 8)
 
