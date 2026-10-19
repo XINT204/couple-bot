@@ -97,6 +97,26 @@ async def cmd_start(message: Message):
   )
 
 
+# --- НОВА ТАЄМНА КОМАНДА ДЛЯ ОЧИЩЕННЯ БАЗИ ---
+@router.message(Command("clear_all"))
+async def cmd_clear_all(message: Message):
+  if not is_allowed(message.from_user.id) or not DATABASE_URL:
+    return
+  
+  try:
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM photos") # Видаляє всі записи з таблиці
+    conn.commit()
+    cursor.close()
+    conn.close()
+    await message.answer("🧹 <b>Усі спогади успішно видалено з бази даних!</b> Архів знову чистий.", parse_mode="HTML", reply_markup=get_main_keyboard())
+  except Exception as e:
+    print(f"Помилка очищення БД: {e}")
+    await message.answer("❌ Виникла помилка при спробі очистити архів.")
+# ---------------------------------------------
+
+
 @router.message(F.photo)
 async def handle_photo(message: Message, state: FSMContext):
   if not is_allowed(message.from_user.id):
