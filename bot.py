@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import logging
 import os
 import random
@@ -23,6 +24,9 @@ from aiogram.types import (
 # Токен та ID
 TOKEN = "8806921238:AAGfgdhGPQd5Gh0QZM2kYCHYnMOq7jKSf5c"
 ALLOWED_USERS = [679531786, 572759802]
+
+# Дата початку стосунків (змініть рік на ваш, наприклад 2024 або 2025)
+START_DATE = datetime(2026, 8, 8)
 
 router = Router()
 
@@ -203,7 +207,38 @@ async def cmd_stats(message: Message):
   )
 
 
-# Веб-сервер-пустушка для утримання бота в хмарі Render
+# Функція для підрахунку точної кількості місяців разом
+def calculate_months():
+  now = datetime.now()
+  months = (now.year - START_DATE.year) * 12 + (now.month - START_DATE.month)
+  return months
+
+
+# Фонова задача для щомісячного нагадування 8-го числа
+async def monthly_announcement_loop(bot: Bot):
+  last_sent_month = None
+  while True:
+    now = datetime.now()
+    if now.day == 8 and now.month != last_sent_month:
+      total_months = calculate_months()
+      for user_id in ALLOWED_USERS:
+        try:
+          await bot.send_message(
+              chat_id=user_id,
+              text=(
+                  f"❤️ <b>Вітаю, у нас сьогодні річниця — {total_months}"
+                  " місяців разом!</b> ❤️\n\nСьогодні 8 число! 🥰 Час згадати"
+                  " найліпші моменти, тисніть кнопку нижче або «🎲 Випадковий"
+                  " спогад»!"
+              ),
+              parse_mode="HTML",
+          )
+        except Exception as e:
+          logging.error(f"Помилка надсилання щомісячного сповіщення: {e}")
+      last_sent_month = now.month
+    await asyncio.sleep(3600)
+
+
 async def handle_web(request):
   return web.Response(text="Bot is running!")
 
@@ -214,7 +249,9 @@ async def main():
   dp = Dispatcher(storage=MemoryStorage())
   dp.include_router(router)
 
-  # Запуск веб-сервера на порті, який виділить Render
+  # Запуск фонового сповіщення
+  asyncio.create_task(monthly_announcement_loop(bot))
+
   app = web.Application()
   app.router.add_get("/", handle_web)
   runner = web.AppRunner(app)
